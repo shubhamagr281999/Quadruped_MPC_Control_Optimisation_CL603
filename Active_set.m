@@ -1,17 +1,21 @@
-function [xfinal,x] = Active_set(xinitial,n_steps,Xref,onGround,mu.fmin.fmax,x0,Q,R)
+function [xfinal,x] = Active_set(n_steps,Xref,onGround,mu,fmin,fmax,x0,Q,R,Ai,Bi)
 
-    % Xref = zeros(12*n_steps,1)+100;
-    % x0 = zeros(12,1)+0.1;
+    %initial guess
+    xinitial=zeros(24*n_steps,1);
+    xPrev=x0;
+    for i=0:(n_steps-1)
+        for j=0:3
+            if(onGround(j+1,i+1)==1)
+                xinitial((12*n_steps+i*12+j*3+1):(12*n_steps+i*12+j*3+3))=[0;0;(fmin+fmax)*0.5];
+            end
+        end
+        xinitial((i*12+1):(i*12+12))=Ai(:,:,i+1)*xPrev+Bi(:,:,i+1)*[xinitial((12*(i+n_steps)+1):(12*(i+n_steps)+12));1];
+        xPrev=xinitial((i*12+1):(i*12+12));
+    end
 
-    %code for xinitial
-    xinitial = zeros(24*n_steps,1);
-    xinitial([1:12],1)=0.1;
-    xinitial([3,6,9,12])=12.1;
-    xinitial([15,18,21,24])=12;
+    onGround=reshape(onGround,1,[])';
 
-    G= Hessian_f(xinitial);
-
-    to_keep_constraints=[];
+    to_keep_constraints=[]; 
     for i=1:size(onGround,1)
         if(onGround(i)==1)
             to_keep_constraints=[to_keep_constraints,((i-1)*6+1):6*i];
@@ -24,6 +28,7 @@ function [xfinal,x] = Active_set(xinitial,n_steps,Xref,onGround,mu.fmin.fmax,x0,
     b = [D_E;C_E;b_I];
     n = size(A,2);
     m = size(A,1);
+    G= Hessian_f(xinitial);
     d = grad_f(zeros(size(xinitial)));   % linear part of quadratic function G*xinitial;
     kk=1;
     x(:,kk) = xinitial;
@@ -74,30 +79,29 @@ function [xfinal,x] = Active_set(xinitial,n_steps,Xref,onGround,mu.fmin.fmax,x0,
     end
 
     function [D,C,D_E,C_E] = equality_constraint()
-        D = zeros(12*n_steps,24*n_steps); % on-groun matrice
-        D_E = zeros(12*n_steps,1);
         C = zeros(12*n_steps,24*n_steps);
         C_E = zeros(12*n_steps,1);
         p = 1;
         for j = 1:length(onGround)
             if onGround(j)==0
-                D(p:p+2,12*k + 3*j -2: 12*k + 3*j) = eye(3,3);
+                D(p:p+2,:)=zeros(3,24*n_steps);
+                D(p:p+2,12*n_steps + 3*j -2: 12*n_steps + 3*j) = eye(3,3);
                 p = p+3;
             end
         end
         for i=0:(n_steps-1)
             if i==0
                 C(1:12,1:12) = eye(12);
-                C(1:12,12*(i)+12*k+1:12*(i)+12*k+12) = -Bi(1:12,1:12,i+1);
+                C(1:12,12*(i)+12*n_steps+1:12*(i)+12*n_steps+12) = -Bi(1:12,1:12,i+1);
+                C_E(1:12) = Ai(:,:,1)*x0+Bi(:,end,i+1);
             else
                 C(12*i+1:12*i+12,12*i+1:12*i+12) = eye(12);
                 C(12*i+1:12*i+12,12*(i-1)+1:12*(i-1)+12) = -Ai(1:12,1:12,i+1);
-                C(12*i+1:12*i+12,12*i+12*k+1:12*i+12*k+12) = -Bi(1:12,1:12,i+1);
+                C(12*i+1:12*i+12,12*i+12*n_steps+1:12*i+12*n_steps+12) = -Bi(1:12,1:12,i+1);
+                C_E(12*i+1:12*i+12)=Bi(:,end,i+1);
             end
         end
-        C_E(1:12) = Ai(:,:,1)*x0;
-        D=D(to_keep_constraints,:);
-        D_E=D_E(to_keep_constraints,:);
+        D_E=zeros(size(D,1),1);
     end 
 
     function [I,b_I] = Inequality_cons()
@@ -106,27 +110,27 @@ function [xfinal,x] = Active_set(xinitial,n_steps,Xref,onGround,mu.fmin.fmax,x0,
         for i = 0:(n_steps-1)
             for j = 1:4
                 if i==0
-                    I(6*(j-1)+1,12*i+12*k+1+3*(j-1)+2) = 1;
-                    I(6*(j-1)+2,12*i+12*k+1+3*(j-1)+2) = -1;
-                    I(6*(j-1)+3,12*i+12*k+1+3*(j-1)+0) = 1 ;
-                    I(6*(j-1)+3,12*i+12*k+1+3*(j-1)+2) = mu;
-                    I(6*(j-1)+4,12*i+12*k+1+3*(j-1)+0) = -1;
-                    I(6*(j-1)+4,12*i+12*k+1+3*(j-1)+2) = mu;
-                    I(6*(j-1)+5,12*i+12*k+1+3*(j-1)+1) = 1;
-                    I(6*(j-1)+5,12*i+12*k+1+3*(j-1)+2) = mu;
-                    I(6*(j-1)+6,12*i+12*k+1+3*(j-1)+1) = -1;
-                    I(6*(j-1)+6,12*i+12*k+1+3*(j-1)+2) = mu;
+                    I(6*(j-1)+1,12*i+12*n_steps+1+3*(j-1)+2) = 1;
+                    I(6*(j-1)+2,12*i+12*n_steps+1+3*(j-1)+2) = -1;
+                    I(6*(j-1)+3,12*i+12*n_steps+1+3*(j-1)+0) = 1 ;
+                    I(6*(j-1)+3,12*i+12*n_steps+1+3*(j-1)+2) = mu;
+                    I(6*(j-1)+4,12*i+12*n_steps+1+3*(j-1)+0) = -1;
+                    I(6*(j-1)+4,12*i+12*n_steps+1+3*(j-1)+2) = mu;
+                    I(6*(j-1)+5,12*i+12*n_steps+1+3*(j-1)+1) = 1;
+                    I(6*(j-1)+5,12*i+12*n_steps+1+3*(j-1)+2) = mu;
+                    I(6*(j-1)+6,12*i+12*n_steps+1+3*(j-1)+1) = -1;
+                    I(6*(j-1)+6,12*i+12*n_steps+1+3*(j-1)+2) = mu;
                 else 
-                    I(24*i+6*(j-1)+1,12*i+12*k+1+3*(j-1)+2) = 1;
-                    I(24*i+6*(j-1)+2,12*i+12*k+1+3*(j-1)+2) = -1;
-                    I(24*i+6*(j-1)+3,12*i+12*k+1+3*(j-1)+0) = 1 ;
-                    I(24*i+6*(j-1)+3,12*i+12*k+1+3*(j-1)+2) = mu;
-                    I(24*i+6*(j-1)+4,12*i+12*k+1+3*(j-1)+0) = -1;
-                    I(24*i+6*(j-1)+4,12*i+12*k+1+3*(j-1)+2) = mu;
-                    I(24*i+6*(j-1)+5,12*i+12*k+1+3*(j-1)+1) = 1;
-                    I(24*i+6*(j-1)+5,12*i+12*k+1+3*(j-1)+2) = mu;
-                    I(24*i+6*(j-1)+6,12*i+12*k+1+3*(j-1)+1) = -1;
-                    I(24*i+6*(j-1)+6,12*i+12*k+1+3*(j-1)+2) = mu;
+                    I(24*i+6*(j-1)+1,12*i+12*n_steps+1+3*(j-1)+2) = 1;
+                    I(24*i+6*(j-1)+2,12*i+12*n_steps+1+3*(j-1)+2) = -1;
+                    I(24*i+6*(j-1)+3,12*i+12*n_steps+1+3*(j-1)+0) = 1 ;
+                    I(24*i+6*(j-1)+3,12*i+12*n_steps+1+3*(j-1)+2) = mu;
+                    I(24*i+6*(j-1)+4,12*i+12*n_steps+1+3*(j-1)+0) = -1;
+                    I(24*i+6*(j-1)+4,12*i+12*n_steps+1+3*(j-1)+2) = mu;
+                    I(24*i+6*(j-1)+5,12*i+12*n_steps+1+3*(j-1)+1) = 1;
+                    I(24*i+6*(j-1)+5,12*i+12*n_steps+1+3*(j-1)+2) = mu;
+                    I(24*i+6*(j-1)+6,12*i+12*n_steps+1+3*(j-1)+1) = -1;
+                    I(24*i+6*(j-1)+6,12*i+12*n_steps+1+3*(j-1)+2) = mu;
                 end
             end
         end
@@ -149,20 +153,20 @@ function [xfinal,x] = Active_set(xinitial,n_steps,Xref,onGround,mu.fmin.fmax,x0,
 
     function del2F=Hessian_f(xstar) 
         x=xstar;
-        n=size(x,1);
-        del2F=zeros(n,n);
+        n_=size(x,1);
+        del2F=zeros(n_,n_);
         h=0.001;
         for i=1:n
-            for j=(i+1):n
-                e=zeros(n,1);
+            for j=(i+1):n_
+                e=zeros(n_,1);
                 e(i)=1;
                 e(j)=1;
-                A=main_function(x+h*e);
-                B=main_function(x-h*e);
+                A_=main_function(x+h*e);
+                B_=main_function(x-h*e);
                 e(i)=-1;
-                C=main_function(x+h*e);
-                D=main_function(x-h*e);
-                del2F(i,j)=(A+B-C-D)/(4*h*h);
+                C_=main_function(x+h*e);
+                D_=main_function(x-h*e);
+                del2F(i,j)=(A_+B_-C_-D_)/(4*h*h);
                 del2F(j,i)=del2F(i,j);
             end
         end        
@@ -192,10 +196,10 @@ function [xfinal,x] = Active_set(xinitial,n_steps,Xref,onGround,mu.fmin.fmax,x0,
     end
 
     function delF=grad_f(xstar) 
-        n = length(xstar);     % upto which the definite loop will run for
+        n_ = length(xstar);     % upto which the definite loop will run for
         h = 0.001;           
-
-        for i = 1:n
+        delF=zeros(n_,1);
+        for i = 1:n_
             e = zeros(n,1);
             e(i,1) = 1;     % ei vector for ith component
             xstar_plus_ei_h = xstar+e*h;
