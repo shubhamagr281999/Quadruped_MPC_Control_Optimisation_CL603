@@ -40,12 +40,12 @@ function U  = Active_set(x0,Xref,n_steps,mu,fmin,fmax,Q,R,onGround,Bi,Ai)
     z = A*x(:,kk)-b;
     W = find(abs(z)<=0.0000001);  
     tW = [1:m];
-    while kk<15000        
+    while kk<500        
         Anew = [A([W],:)];
         row = size(Anew,1);
-        G= Hessian_f(x(:,kk));
+        G= Hessian_f(x(:,kk))
         d = grad_f(zeros(size(xinitial)));   % linear part of quadratic function G*xinitial;
-        W
+        
         kkt = [G Anew';Anew zeros(row,row)]; %check this also
         %kkt = eye(192);
         g = G*x(:,kk) + d;
@@ -54,7 +54,7 @@ function U  = Active_set(x0,Xref,n_steps,mu,fmin,fmax,Q,R,onGround,Bi,Ai)
         p(:,kk) = -values(1:n,:);
         pk = p(:,kk);
         norm_tol = norm(pk);
-        if norm(pk)<0.0001 
+        if norm(pk)<0.001 
             lambda = values(n+1:length(values),:);
             if all(lambda>=0)
                 xfinal = x(:,kk);
@@ -73,17 +73,19 @@ function U  = Active_set(x0,Xref,n_steps,mu,fmin,fmax,Q,R,onGround,Bi,Ai)
                     alph(i) = (b(i) - A(i,:)*x(:,kk))/(A(i,:)*pk);               
                 end
             end
-            alph(alph<=0) = 10;
-            alphak = min([1,alph]);
-            Wnew = find(alph==alphak);
+            alph(alph<=0.00001) = 10;
+            alphak = min([1,alph])
+          
+            Wnew = find(alph<=(alphak+10^-3));
             x(:,kk+1) = x(:,kk) + alphak*pk;
             kk = kk+1;
+            x(39:3:end,kk)
             W = [W;Wnew'];
         end
     end
 
     U=zeros(12,1);    
-    U(:,1)=xfinal((12*(n_steps)+1):(12*(n_steps)+12));
+    U(:,1)=x((12*(n_steps)+1):(12*(n_steps)+12),kk-1);
 
     function [D_,C,D_E,C_E] = equality_constraint()
         C = zeros(12*n_steps,24*n_steps);

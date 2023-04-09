@@ -45,7 +45,7 @@ function U  = Active_set(x0,Xref,n_steps,mu,fmin,fmax,Q,R,onGround,Bi,Ai)
         row = size(Anew,1);
         G= Hessian_f(x(:,kk));
         d = grad_f(zeros(size(xinitial)));   % linear part of quadratic function G*xinitial;
-        W
+        
         kkt = [G Anew';Anew zeros(row,row)]; %check this also
         %kkt = eye(192);
         g = G*x(:,kk) + d;
@@ -73,11 +73,14 @@ function U  = Active_set(x0,Xref,n_steps,mu,fmin,fmax,Q,R,onGround,Bi,Ai)
                     alph(i) = (b(i) - A(i,:)*x(:,kk))/(A(i,:)*pk);               
                 end
             end
-            alph(alph<=0) = 10;
-            alphak = min([1,alph]);
+            alph(alph<=0.00001) = 10;
+            alphak = min([1,alph])
+          
             Wnew = find(alph==alphak);
             x(:,kk+1) = x(:,kk) + alphak*pk;
-            kk = kk+1;
+            kk = kk+1;W = [W;Wnew']
+
+            x(39:3:end,kk)
             W = [W;Wnew'];
         end
     end
