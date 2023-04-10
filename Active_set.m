@@ -26,6 +26,7 @@ function U  = Active_set(x0,Xref,n_steps,mu,fmin,fmax,Q,R,onGround,Bi,Ai)
     to_keep_constraints=to_keep_constraint(1:cons_count,1);
     [Du,C,Du_E,C_E] = equality_constraint();
     [I,b_I] = Inequality_cons();
+    m_eq=size(Du,1)+size(C,1);
     A = [Du;C;I];
     b = [Du_E;C_E;b_I];
     n = size(A,2);
@@ -56,12 +57,16 @@ function U  = Active_set(x0,Xref,n_steps,mu,fmin,fmax,Q,R,onGround,Bi,Ai)
         norm_tol = norm(pk);
         if norm(pk)<0.001 
             lambda = values(n+1:length(values),:);
-            if all(lambda>=0)
-                xfinal = x(:,kk);
+            lambda_=lambda((m_eq+1):size(lambda,1));
+            if all(lambda_>=0) 
                 break
             else 
                 ConsToRemove=find(lambda==min(lambda));
-                W(ConsToRemove) = [];
+                for i=ConsToRemove
+                    if(W(ConsToRemove)>m_eq)
+                        W(ConsToRemove) = [];
+                    end
+                end
                 x(:,kk+1) = x(:,kk);
                 kk = kk+1;
             end
